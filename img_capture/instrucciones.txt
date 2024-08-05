@@ -1,0 +1,4 @@
+El archivo principal es capture_image.c 
+Pasos:
+1. gcc -o capture_image  capture_image.c -lcurl
+2. ./capture_image

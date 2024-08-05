@@ -1,0 +1,6 @@
+numpy==1.26.0
+wheel
+matplotlib
+pytorch
+torchvision==0.18.1
+pillow==10.1.0
