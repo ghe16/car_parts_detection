@@ -79,7 +79,12 @@ plot_mini_batch(imgs,masks) """
 def model_test():
     x = torch.randn((32,3,224,224))
     model = UNET(3, 64, 2)
-    return model
+    return model(x)
+
+preds = model_test()
+
+print(preds.shape)
+
 
 def accuracy(model, loader):
     pass
