@@ -12,6 +12,7 @@ import PIL
 from PIL import Image
 #
 from cargar_dataset import carga_carDataset
+from models.UnetModel import *
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -47,4 +48,39 @@ train_loader = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 val_loader   = DataLoader(val_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
 imgs, masks = next(iter(train_loader))
-print(imgs.shape, masks.shape)
+
+# print(imgs.shape, masks.shape)
+
+
+""" # test imprimir las 10 primeras
+for i, (x,y) in enumerate(train_loader):
+    print(i, x.shape, y.shape)
+    if i == 9:
+        break
+
+#  visualizar los graficos de un batch
+imgs, masks = next(iter(train_loader))
+def plot_mini_batch(imgs, masks):
+    plt.figure(figsize=(20,10))
+    for i in range(BATCH_SIZE):
+        plt.subplot(4,8, i+1)
+        img = imgs[i,...].permute(1,2,0).numpy()
+        mask = masks[i,...].permute(1,2,0).numpy()
+        plt.imshow(img)
+        plt.imshow(mask, alpha=0.5)
+        plt.axis('Off')
+        plt.tight_layout()
+    plt.show()
+
+plot_mini_batch(imgs,masks) """
+
+
+
+def model_test():
+    x = torch.randn((32,3,224,224))
+    model = UNET(3, 64, 2)
+    return model
+
+def accuracy(model, loader):
+    pass
+
