@@ -13,6 +13,7 @@ from PIL import Image
 #
 from cargar_dataset import carga_carDataset
 from models.UnetModel import *
+from utilidades.utilidades import finding_lr,accuracy
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -47,7 +48,7 @@ train_dataset, val_dataset = random_split(full_dataset, [TRAIN_SIZE,VAL_SIZE])
 train_loader = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 val_loader   = DataLoader(val_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
-imgs, masks = next(iter(train_loader))
+
 
 # print(imgs.shape, masks.shape)
 
@@ -57,35 +58,71 @@ for i, (x,y) in enumerate(train_loader):
     print(i, x.shape, y.shape)
     if i == 9:
         break
-
-#  visualizar los graficos de un batch
-imgs, masks = next(iter(train_loader))
-def plot_mini_batch(imgs, masks):
-    plt.figure(figsize=(20,10))
-    for i in range(BATCH_SIZE):
-        plt.subplot(4,8, i+1)
-        img = imgs[i,...].permute(1,2,0).numpy()
-        mask = masks[i,...].permute(1,2,0).numpy()
-        plt.imshow(img)
-        plt.imshow(mask, alpha=0.5)
-        plt.axis('Off')
-        plt.tight_layout()
-    plt.show()
-
-plot_mini_batch(imgs,masks) """
+"""
 
 
 
-def model_test():
-    x = torch.randn((32,3,224,224))
-    model = UNET(3, 64, 2)
-    return model(x)
 
-preds = model_test()
+#training
 
-print(preds.shape)
+def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
+    model = model.to(device= device)
+    for epoch in range(epochs):
+        train_correct_num = 0   # se resetea cada epoch
+        train_total =  0   # num elementos evaluados
+        train_cost_acum = 0. #  coste acumulado
+        for mb , (x, y) in enumerate(train_loader, start=1):
+            model.train()
+            x = x.to(device=device, dtype = torch.float32)
+            y = y.to(device=device, dtype= torch.long).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
+            scores  = model(x)
+            cost = F.cross_entropy(input=scores, target=y)
+            optimiser.zero_grad()
+            cost.backward()
+            optimiser.step()
+            if scheduler: 
+                scheduler.step()
+            train_predictions = torch.argmax(scores, dim = 1)
+            train_correct_num += (train_predictions == y).sum()
+            train_total += torch.numel(train_predictions)
+            train_cost_acum += cost.item()
+            if mb%store_every == 0:
+                val_cost, val_acc, dice, iou = accuracy(model, val_loader)
+                train_acc = float(train_correct_num)/train_total
+                train_cost_every = float(train_cost_acum)/mb
+                print(f'mb: {mb}, train_cost: {train_cost_every:.3f}, val cost {val_cost:.3f},'
+                        f'train acc: {train_acc:.4f}, val acc: {val_acc:.3f}, dice: {dice}, iou: {iou}')
+                
+                #saving data
+                #train_acc_history.append(train_acc)
+                #train_cost_history.append(train_cost_every)
+        #train_acc = float(train_correct_num)/train_total
+        #train_cost_every = float(train_cost_acum)/len(train_loader)
+        #return train_acc_history
+            
 
 
-def accuracy(model, loader):
-    pass
+#Train model 
 
+torch.manual_seed(42)
+#imagenes RGB de entrada
+#solamente 4 canales, no los 64 de la red original para reducir coste computacional
+# 2 clases para segmentacion
+epochs = 15
+model = UNET(3,4,2)
+optimiser_unet = torch.optim.SGD(model.parameters(),
+                                 lr = 0.1, momentum=0.95,
+                                 weight_decay=1e-4
+                                 )
+#esta funcion se usa para encontrar el lr ideal. pero no se usa mas.
+#la simulacion mostro que el valor optimo es 0.1
+#lg_lr, losses, accuracies  = finding_lr(model, optimiser_unet, train_loader, start_val=1e-6, end_val=10)
+
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
+                                                max_lr=0.1,
+                                                steps_per_epoch=len(train_loader),
+                                                epochs=epochs,pct_start=0.43,div_factor=10, final_div_factor=1000,
+                                                three_phase=True
+                                                )
+
+train(model, optimiser_unet, scheduler, epochs)
