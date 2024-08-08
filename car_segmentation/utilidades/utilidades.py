@@ -15,9 +15,9 @@ def model_test(modelo):
 
 
 
-def plot_mini_batch(train_loader, BATCH_SIZE: int):
+def plot_mini_batch(train_loader, BATCH_SIZE: int, imgs, masks):
     ''' visualiza los graficos de un batch'''
-    imgs, masks = next(iter(train_loader))
+    #imgs, masks = next(iter(train_loader))
     plt.figure(figsize=(20,10))
     for i in range(BATCH_SIZE):
         plt.subplot(4,8, i+1)
