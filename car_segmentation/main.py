@@ -73,30 +73,30 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
         train_cost_acum = 0. #  coste acumulado
         for mb , (x, y) in enumerate(train_loader, start=1):
             model.train()
-            x=x.to(device=device, dtype = torch.float32)
-            y = y.to(device=device, dtype= torch.float32).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
+            x= x.to(device=device, dtype = torch.float32)
+            y = y.to(device=device, dtype= torch.long).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
             #print("x",x.shape, "y", y.shape)
             _, targety, targetx = y.shape
             scores  = model(x)
-            scores = torch.argmax(scores,dim=1).float()
-            batches,  height, width = scores.shape
-            start_Y = (height - targety) // 2
-            start_X = (width - targetx) // 2
-            scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
+            #scores = torch.argmax(scores,dim=1).float()
+            #batches,  height, width = scores.shape
+            #start_Y = (height - targety) // 2
+            #start_X = (width - targetx) // 2
+            #scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
+            #print(scores.shape)
+            #scores = scores[:,1,:,:]
             #print("scores_new",scores.shape)
             cost = F.cross_entropy(input=scores, target=y)
             #cost = criterion(scores, y)
             optimiser.zero_grad()
-            cost.requires_grad = True
+            #cost.requires_grad = True
             cost.backward()
             optimiser.step()
             if scheduler: 
                 scheduler.step()
-            #train_predictions = torch.argmax(scores, dim = 1)
-            #train_predictions = train_predictions[start_Y-1:start_Y + targety, start_X-1:start_X + targetx]
-            #print(train_predictions.shape, "y", y.shape)
-            train_correct_num += (scores == y).sum()
-            train_total += torch.numel(scores)
+            train_predictions = torch.argmax(scores, dim = 1)
+            train_correct_num += (train_predictions == y).sum()
+            train_total += torch.numel(train_predictions)
             train_cost_acum += cost.item()
             if mb%store_every == 0:
                 val_cost, val_acc, dice, iou = accuracy(model, val_loader)

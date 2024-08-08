@@ -48,13 +48,13 @@ def finding_lr(model, optimiser, loader, start_val = 1e-6, end_val = 1, beta = 0
         y = y.to(device=device, detype = torch.float32).squeeze()
         optimiser.zero_grad()
 
-        _, targety, targetx = y.shape
+        #_, targety, targetx = y.shape
         scores  = model(x)
         scores = torch.argmax(scores,dim=1).float()
-        batches,  height, width = scores.shape
-        start_Y = (height - targety) // 2
-        start_X = (width - targetx) // 2
-        scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
+        #batches,  height, width = scores.shape
+        #start_Y = (height - targety) // 2
+        #start_X = (width - targetx) // 2
+        #scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
         cost = F.cross_entropy(input=scores, target=y)
         loss = beta*loss + (1-beta)*cost.item()
         #bias correction
@@ -95,24 +95,24 @@ def accuracy(model, loader):
     with torch.no_grad():
         for x, y in loader:
             x = x.to(device=device, dtype = torch.float32)            
-            y = y.to(device = device, dtype = torch.float32).squeeze(1)            
-            _, targety, targetx = y.shape
+            y = y.to(device = device, dtype = torch.long).squeeze(1)            
+            #_, targety, targetx = y.shape
             scores  = model(x)
-            scores = torch.argmax(scores,dim=1).float()
-            batches,  height, width = scores.shape
-            start_Y = (height - targety) // 2
-            start_X = (width - targetx) // 2
-            scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
+            #scores = torch.argmax(scores,dim=1).float()
+            #batches,  height, width = scores.shape
+            #start_Y = (height - targety) // 2
+            #start_X = (width - targetx) // 2
+            #scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
             cost += (F.cross_entropy(scores, y)).item()
             #standard accuracy
-            #preds = torch.argmax(scores, dim=1)
-            correct += (scores == y).sum()
-            total += torch.numel(scores)
+            preds = torch.argmax(scores, dim=1)
+            correct += (preds == y).sum()
+            total += torch.numel(preds)
             #dice coefficient
-            intersection += (scores*y).sum()
-            denom +=  (scores + y).sum()
+            intersection += (preds*y).sum()
+            denom +=  (preds + y).sum()
             dice = 2*intersection/(denom + 1e-8)
             #intersection over union
-            union += (scores + y - scores*y).sum()
+            union += (preds + y - preds*y).sum()
             iou  = (intersection)/(union + 1e-8)
         return cost/len(loader), float(correct/total), dice, iou
