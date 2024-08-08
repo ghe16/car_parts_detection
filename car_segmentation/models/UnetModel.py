@@ -1,3 +1,4 @@
+from torch.nn import functional as F
 from torch import nn, optim
 import torch 
 
@@ -21,7 +22,7 @@ class Double_Conv(nn.Module):
 
                             Conv_3_k(channels_out,channels_out),
                             nn.BatchNorm2d(channels_out),
-                            nn.ReLU(),
+                            nn.ReLU()
         )
     def forward(self, x):
         return self.double_conv(x)
@@ -34,7 +35,7 @@ class Down_conv(nn.Module):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.MaxPool2d(2,2),
-            Double_Conv(channels_in,channels_out),
+            Double_Conv(channels_in,channels_out)
         )
 
     def forward(self,x):
@@ -46,16 +47,16 @@ class Up_conv(nn.Module):
     def __init__(self,channels_in,channels_out):
         super().__init__()
         self.upsample_layer = nn.Sequential(
-                                nn.Upsample(scale_factor=2, mode='bicubic'),
-                                nn.Conv2d(channels_in,channels_in//2, kernel_size=1,stride=1)
+                                nn.Upsample(scale_factor=2, mode='bilinear'),
+                                nn.Conv2d(channels_in,channels_in//2, kernel_size=1,stride=1,padding=1)
                                 )
         self.decoder = Double_Conv(channels_in,channels_out)
 
     def forward(self,x1,x2):
         """x1 es l feature map que viene de abajo 
-        x2 es el feature map que viene de la parte de downsampling (espejo)"""
-
+        x2 es el feature map que viene de la parte de downsampling (espejo)"""        
         x1 = self.upsample_layer(x1)
+        x1 = x1[:,:,0:x2.size()[2],0: x2.size()[3]]
         x = torch.cat([x2,x1],dim=1)
         return self.decoder(x)
 
@@ -68,15 +69,14 @@ class UNET(nn.Module):
         self.down_conv1 = Down_conv(channels    , channels * 2)   # 128  112 x 112
         self.down_conv2 = Down_conv(channels * 2, channels * 4)   # 256  56 X 56
         self.down_conv3 = Down_conv(channels * 4, channels * 8)   # 512  28 X 28
-        
-        self.middle_conv = Down_conv(channels * 8, channels * 16)  # 1024 14 x 14 
+        self.middle_conv = Down_conv(channels * 8, channels * 16)  # 1024 14 x 14
 
         self.up_conv1 = Up_conv(channels * 16, channels * 8)  # 1024 52 X52
         self.up_conv2 = Up_conv(channels *  8, channels * 4)
         self.up_conv3 = Up_conv(channels *  4, channels * 2)
         self.up_conv4 = Up_conv(channels *  2, channels  )
 
-        self.last_conv = nn.Conv2d(channels, num_classes, kernel_size=1, stride= 1)
+        self.last_conv = nn.Conv2d(channels, num_classes, kernel_size=1, stride= 1,padding =1)
 
     def forward(self,x):
         x1 = self.first_conv(x)
