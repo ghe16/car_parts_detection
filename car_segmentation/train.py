@@ -27,10 +27,11 @@ TEST_PATH = "carvana-image-masking-challenge/test/"
 #
 BATCH_SIZE = 32
 
+
 transform_data = T.Compose([
-    T.Resize([224,244]),
-    T.ToTensor()
-])
+        T.Resize([224,244]),
+        T.ToTensor()
+    ])
 
 
 full_dataset = carga_carDataset.Car_Dataset(
@@ -48,21 +49,6 @@ train_dataset, val_dataset = random_split(full_dataset, [TRAIN_SIZE,VAL_SIZE])
 train_loader = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 val_loader   = DataLoader(val_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
-
-
-# print(imgs.shape, masks.shape)
-
-
-""" # test imprimir las 10 primeras
-for i, (x,y) in enumerate(train_loader):
-    print(i, x.shape, y.shape)
-    if i == 9:
-        break
-"""
-
-
-
-
 #training
 
 def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
@@ -75,21 +61,10 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
             model.train()
             x= x.to(device=device, dtype = torch.float32)
             y = y.to(device=device, dtype= torch.long).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
-            #print("x",x.shape, "y", y.shape)
             _, targety, targetx = y.shape
             scores  = model(x)
-            #scores = torch.argmax(scores,dim=1).float()
-            #batches,  height, width = scores.shape
-            #start_Y = (height - targety) // 2
-            #start_X = (width - targetx) // 2
-            #scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
-            #print(scores.shape)
-            #scores = scores[:,1,:,:]
-            #print("scores_new",scores.shape)
             cost = F.cross_entropy(input=scores, target=y)
-            #cost = criterion(scores, y)
             optimiser.zero_grad()
-            #cost.requires_grad = True
             cost.backward()
             optimiser.step()
             if scheduler: 
@@ -105,50 +80,41 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
                 print(f'mb: {mb}, train_cost: {train_cost_every:.3f}, val cost {val_cost:.3f},'
                         f'train acc: {train_acc:.4f}, val acc: {val_acc:.3f}, dice: {dice}, iou: {iou}')
                 torch.save(model.state_dict(),'model_state_dict.pth')
-                torch.save(model,'entire_model_.pth')
+                torch.save(model,'entire_model_.pth')            
 
-                #saving data
-                #train_acc_history.append(train_acc)
-                #train_cost_history.append(train_cost_every)
-        #train_acc = float(train_correct_num)/train_total
-        #train_cost_every = float(train_cost_acum)/len(train_loader)
-        #return train_acc_history
-            
+def main():
+    
+    epochs = 50
+    model = UNET(3,4,2)
+    try:
+        loaded_model = torch.load("entire_model_.pth")
+        model = loaded_model.eval()
+        print("existing model loaded")
+    except:
+        print("No se encontro el modelo")
 
+    optimiser_unet = torch.optim.SGD(model.parameters(),
+                                    lr = 0.01, momentum=0.95,
+                                    weight_decay=1e-4
+                                    )
+    #esta funcion se usa para encontrar el lr ideal. pero no se usa mas.
+    #la simulacion mostro que el valor optimo es 0.1
+    #lg_lr, losses, accuracies  = finding_lr(model, optimiser_unet, train_loader, start_val=1e-6, end_val=10)
+
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
+                                                    max_lr=0.1,
+                                                    steps_per_epoch=len(train_loader),
+                                                    epochs=epochs,pct_start=0.43,div_factor=10, final_div_factor=1000,
+                                                    three_phase=True
+                                                    )
+
+    #imagenes RGB de entrada
+    #solamente 4 canales, no los 64 de la red original para reducir coste computacional
+    # 2 clases para segmentacion
+
+
+    train(model, optimiser_unet, scheduler, epochs)
 
 #Train model 
-
-torch.manual_seed(42)
-#imagenes RGB de entrada
-#solamente 4 canales, no los 64 de la red original para reducir coste computacional
-# 2 clases para segmentacion
-epochs = 15
-model = UNET(3,4,2)
-criterion = nn.BCEWithLogitsLoss()
-optimiser_unet = torch.optim.SGD(model.parameters(),
-                                 lr = 0.01, momentum=0.95,
-                                 weight_decay=1e-4
-                                 )
-#esta funcion se usa para encontrar el lr ideal. pero no se usa mas.
-#la simulacion mostro que el valor optimo es 0.1
-#lg_lr, losses, accuracies  = finding_lr(model, optimiser_unet, train_loader, start_val=1e-6, end_val=10)
-
-scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
-                                                max_lr=0.1,
-                                                steps_per_epoch=len(train_loader),
-                                                epochs=epochs,pct_start=0.43,div_factor=10, final_div_factor=1000,
-                                                three_phase=True
-                                                )
-
-
-
-try:
-    loaded_model = UNET(3,4,2)
-    loaded_model = torch.load("entire_model_.pth")
-    model = loaded_model.eval()
-except:
-    print("No se encontro el modelo")
-
-
-train(model, optimiser_unet, scheduler, epochs)
- 
+if __name__ == '__main__':
+    main()
