@@ -104,7 +104,9 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
                 train_cost_every = float(train_cost_acum)/mb
                 print(f'mb: {mb}, train_cost: {train_cost_every:.3f}, val cost {val_cost:.3f},'
                         f'train acc: {train_acc:.4f}, val acc: {val_acc:.3f}, dice: {dice}, iou: {iou}')
-                
+                torch.save(model.state_dict(),'model_state_dict.pth')
+                torch.save(model,'entire_model_.pth')
+
                 #saving data
                 #train_acc_history.append(train_acc)
                 #train_cost_history.append(train_cost_every)
@@ -138,4 +140,15 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
                                                 three_phase=True
                                                 )
 
+
+
+try:
+    loaded_model = UNET(3,4,2)
+    loaded_model = torch.load("entire_model_.pth")
+    model = loaded_model.eval()
+except:
+    print("No se encontro el modelo")
+
+
 train(model, optimiser_unet, scheduler, epochs)
+ 
