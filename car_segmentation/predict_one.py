@@ -3,12 +3,11 @@ import torchvision.transforms as T
 from PIL import Image
 import torch.nn as nn
 
-from utilidades.utilidades import accuracy, plot_mini_batch
-from cargar_dataset import carga_carDataset
 from models.UnetModel import *
 
 import PIL
 from PIL import Image
+import argparse
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -38,40 +37,28 @@ def preprocess_image(image_path):
 
 
 def apply_mask(model, image_tensor):
-    # Expand mask to match the number of channels in the image
-    #mask_tensor = mask_tensor.expand_as(image_tensor)
-    print(image_tensor.shape)
+    # Expand mask to match the number of channels in the image 
     scores = model(image_tensor)
     preds = torch.argmax(scores, dim = 1).float()
     pred = preds.expand_as(image_tensor)
     img2 = image_tensor * pred
-    
-    # Apply the mask to the image
-    #object_tensor = image_tensor * mask_tensor
-    
     return img2
 
 def save_result(tensor, output_path):
     # Convert tensor to PIL image
-    print(tensor.shape)
     tensor = tensor.squeeze(0)
     result_image = T.ToPILImage()(tensor)
-    
     # Save the result
     result_image.save(output_path)
 
-def main():
+def main(args):
     # Paths to the model, image, mask, and output
-    model_path = "entire_model_.pth"
-    image_path = 'imgs_prueba/car1.jpg'
-    output_path = 'imgs_prueba/predicted_mask.jpg'
-    
     # Load the model
-    model = load_model(model_path)
-    
+    model = load_model(args.model_path)
+    image_path = args.image_path
+    output_path = args.output_path
     # Preprocess the input image and mask
     image_tensor = preprocess_image(image_path)
-    
     # make the prediction
     object_tensor = apply_mask(model, image_tensor)
     
@@ -80,4 +67,9 @@ def main():
     print(f"Result saved to {output_path}")
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser( description="Programa para poner parametros de entrada")
+    parser.add_argument('--image_path',type=str,required=True,help= "Path a la imagen que se quiere evaluar")
+    parser.add_argument('--model_path',type=str,default='entire_model_.pth',help="path al modelo,(opcional)")
+    parser.add_argument('--output_path',type=str,default='imgs_prueba/predicted_mask.jpg',help="nombre del archivo de salida (opcional)")
+    args = parser.parse_args()
+    main(args)

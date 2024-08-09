@@ -1,2 +1,3 @@
 car_segmentation/.venv
 car_segmentation/imgs_prueba
+predicted_masks
