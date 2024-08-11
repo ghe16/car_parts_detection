@@ -39,7 +39,6 @@ def accuracy(model, loader, criterion):
     total = 0 
     cost = 0.
     model = model.to(device=device)
-    model.eval()
     with torch.no_grad():
         for x, y in loader:
             x = x.to(device=device, dtype = torch.float32)            

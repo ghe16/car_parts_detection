@@ -29,16 +29,20 @@ class Car_Dataset(Dataset):
     
     def __getitem__(self,idx):
         image_name = os.path.join(self.train_data,self.images[idx]) #anadir ruta a imagen
-        img = Image.open(image_name)
-        trans = T.ToTensor()
+        img = Image.open(image_name).convert("RGB")
+        
+
         if self.img_transforms is not None:
             img = self.img_transforms(img)     # aplicar transformaciones
         else:
+            trans = T.ToTensor()
             img = trans(img)
 
         if self.train_masks is not None:
-            mask_name = os.path.join(self.train_masks, self.masks[idx])    #cargamos la mascara
-            mask = Image.open(mask_name)
+            #mask_name = os.path.join(self.train_masks,self.masks[idx].replace(".jpg","_mask.gif")) 
+            mask_name = os.path.join(self.train_masks,self.masks[idx]) 
+            
+            mask = Image.open(mask_name).convert("L")
             if self.mask_transforms is not None:
                 mask = self.mask_transforms(mask)
             else:

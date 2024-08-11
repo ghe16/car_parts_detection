@@ -13,7 +13,7 @@ from PIL import Image
 #
 from cargar_dataset import carga_carDataset
 from models.UnetModelMultiClass import *
-from utilidades.utilidades import finding_lr,accuracy, model_test
+from utilidades.utilidades import accuracy
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -22,8 +22,8 @@ print(device)
 ##Paths
 PATH = "data/"
 TRAIN_PATH = "data/train/JPEGImages/"
-TRAIN_MASKS_PATH="data/train/JPEGmasks/"
-TEST_PATH = "data/test/"
+TRAIN_MASKS_PATH="data/train/JPEGMasks/"
+TEST_PATH = ".data/test/"
 #
 BATCH_SIZE = 32
 
@@ -33,12 +33,17 @@ transform_data = T.Compose([
         T.ToTensor()
     ])
 
+transform_masks = T.Compose([
+        T.Resize([224,244]),
+        T.ToTensor()
+    ])
+
 
 full_dataset = carga_carDataset.Car_Dataset(
     TRAIN_PATH,
     TRAIN_MASKS_PATH,
     img_transforms=transform_data,
-    mask_transforms=transform_data
+    mask_transforms=transform_masks
 )
 
 TRAIN_SIZE = int(len(full_dataset)*0.8)
@@ -51,7 +56,8 @@ val_loader   = DataLoader(val_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
 #training
 
-def train(model, optimiser, criterion, scheduler = None, epochs = 100, store_every = 25):
+def train(model, optimiser, criterion, scheduler = None, epochs = 100, store_every = 5):
+    print("entramos a entrenar")
     model = model.to(device= device)
     for epoch in range(epochs):
         train_correct_num = 0   # se resetea cada epoch
@@ -60,9 +66,9 @@ def train(model, optimiser, criterion, scheduler = None, epochs = 100, store_eve
         for mb , (x, y) in enumerate(train_loader, start=1):
             model.train()
             x= x.to(device=device, dtype = torch.float32)
-            y = y.to(device=device, dtype= torch.long).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
-            _, targety, targetx = y.shape
+            y = y.to(device=device, dtype= torch.long)  # eliminamos el canal 1 (blanco y negro)
             scores  = model(x)
+            #print(scores.shape)
             cost = criterion(input=scores, target=y)
             optimiser.zero_grad()
             cost.backward()
@@ -80,19 +86,18 @@ def train(model, optimiser, criterion, scheduler = None, epochs = 100, store_eve
                 print(f'mb: {mb}, train_cost: {train_cost_every:.3f}, val cost {val_cost:.3f},'
                         f'train acc: {train_acc:.4f}, val acc: {val_acc:.3f}, dice: {dice}, iou: {iou}')
                 torch.save(model.state_dict(),'model_state_dict.pth')
-                torch.save(model,'entire_model_.pth')            
+                torch.save(model,'entire_model_multi.pth')            
 
 def main():
     epochs = 50
-    num_classes = 21
-    model = UNET(3,4,num_classes)
     criterion = nn.CrossEntropyLoss()
-    try:
-        loaded_model = torch.load("entire_model_.pth")
+    if os.path.isfile("entire_model_multi.pth"):
+        loaded_model = torch.load("entire_model_multi.pth")
         model = loaded_model.eval()
         print("existing model loaded")
-    except:
+    else:
         print("No se encontro el modelo")
+        model = UNET(3,4,19)
 
     optimiser_unet = torch.optim.Adam(model.parameters(),
                                     lr = 1e-4
@@ -100,7 +105,7 @@ def main():
     #esta funcion se usa para encontrar el lr ideal. pero no se usa mas.
     #la simulacion mostro que el valor optimo es 0.1
     #lg_lr, losses, accuracies  = finding_lr(model, optimiser_unet, train_loader, start_val=1e-6, end_val=10)
-
+    print("optimiser_unet")
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
                                                     max_lr=0.1,
                                                     steps_per_epoch=len(train_loader),
@@ -111,9 +116,9 @@ def main():
     #imagenes RGB de entrada
     #solamente 4 canales, no los 64 de la red original para reducir coste computacional
     # 2 clases para segmentacion
+    print("scheduler ready")
 
-
-    train(model, optimiser_unet, criterion, scheduler, epochs)
+    train(model = model,optimiser = optimiser_unet, criterion = criterion, scheduler = scheduler, epochs= epochs)
 
 #Train model 
 if __name__ == '__main__':
