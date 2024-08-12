@@ -1,96 +1,91 @@
-from torch.nn import functional as F
-from torch import nn, optim
-import torch 
-
-
-class Conv_3_k(nn.Module):
-    def __init__(self,channels_in,channels_out):
-        super().__init__()
-        self.conv1 = nn.Conv2d(channels_in,channels_out,kernel_size=3,stride=1,padding=1)
-
-    def forward(self,x):
-        return self.conv1(x)
-
-class Double_Conv(nn.Module):
-    '''Capas dobles de convoluciones para downsampling'''
-    def __init__(self, channels_in, channels_out):
-        super().__init__()
-        self.double_conv = nn.Sequential(
-                            Conv_3_k(channels_in,channels_out),
-                            nn.BatchNorm2d(channels_out),
-                            nn.ReLU(),
-
-                            Conv_3_k(channels_out,channels_out),
-                            nn.BatchNorm2d(channels_out),
-                            nn.ReLU()
-        )
-    def forward(self, x):
-        return self.double_conv(x)
-
-class Down_conv(nn.Module):
-    '''
-    Downsampling
-    '''
-    def __init__(self, channels_in, channels_out):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            nn.MaxPool2d(2,2),
-            Double_Conv(channels_in,channels_out)
-        )
-
-    def forward(self,x):
-        return self.encoder(x)
-    
-
-class Up_conv(nn.Module):
-    """Proceso inverson de subida. En vez de usar transpose conv layers, usamos upsample + 1x1 conv"""
-    def __init__(self,channels_in,channels_out):
-        super().__init__()
-        self.upsample_layer = nn.Sequential(
-                                nn.ConvTranspose2d(channels_in,channels_in//2,kernel_size=2,stride=2,padding=0)
-                                #nn.Conv2d(channels_in,channels_in//2, kernel_size=1,stride=1,padding=1)
-                                )
-        self.decoder = Double_Conv(channels_in,channels_out)
-
-    def forward(self,x1,x2):
-        """x1 es l feature map que viene de abajo 
-        x2 es el feature map que viene de la parte de downsampling (espejo)"""        
-        #print(x1.shape,x2.shape)
-        x1 = self.upsample_layer(x1)
-        #print(x1.shape)
-        x2 = x1[:,:,0:x1.size()[2],0: x1.size()[3]]
-        x = torch.cat([x2,x1],dim=1)
-        return self.decoder(x)
-
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 
 class UNET(nn.Module):
-    """modelo total integrado"""
-    def __init__(self, channels_in, channels, num_classes):
-        super().__init__()
-        self.first_conv = Double_Conv(channels_in, channels)      # 64   224 x 224
-        self.down_conv1 = Down_conv(channels    , channels * 2)   # 128  112 x 112
-        self.down_conv2 = Down_conv(channels * 2, channels * 4)   # 256  56 X 56
-        self.down_conv3 = Down_conv(channels * 4, channels * 8)   # 512  28 X 28
-        self.middle_conv = Down_conv(channels * 8, channels * 16)  # 1024 14 x 14
+    def __init__(self, in_channels=3, out_channels=1, init_features=64, dropout_prob=0.5):
+        super(UNET, self).__init__()
 
-        self.up_conv1 = Up_conv(channels * 16, channels * 8)  # 1024 52 X52
-        self.up_conv2 = Up_conv(channels *  8, channels * 4)
-        self.up_conv3 = Up_conv(channels *  4, channels * 2)
-        self.up_conv4 = Up_conv(channels *  2, channels  )
+        features = init_features
+        self.encoder1 = UNET._block(in_channels, features, dropout_prob)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder2 = UNET._block(features, features * 2, dropout_prob)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder3 = UNET._block(features * 2, features * 4, dropout_prob)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.encoder4 = UNET._block(features * 4, features * 8, dropout_prob)
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        self.last_conv = nn.Conv2d(channels, num_classes, kernel_size=1, stride= 1,padding =(0,2))
+        self.bottleneck = UNET._block(features * 8, features * 16, dropout_prob)
 
-    def forward(self,x):
-        x1 = self.first_conv(x)
-        x2 = self.down_conv1(x1)
-        x3 = self.down_conv2(x2)
-        x4 = self.down_conv3(x3)
+        self.upconv4 = nn.ConvTranspose2d(
+            features * 16, features * 8, kernel_size=2, stride=2
+        )
+        self.decoder4 = UNET._block((features * 8) * 2, features * 8, dropout_prob)
+        self.upconv3 = nn.ConvTranspose2d(
+            features * 8, features * 4, kernel_size=2, stride=2
+        )
+        self.decoder3 = UNET._block((features * 4) * 2, features * 4, dropout_prob)
+        self.upconv2 = nn.ConvTranspose2d(
+            features * 4, features * 2, kernel_size=2, stride=2
+        )
+        self.decoder2 = UNET._block((features * 2) * 2, features * 2, dropout_prob)
+        self.upconv1 = nn.ConvTranspose2d(
+            features * 2, features, kernel_size=2, stride=2
+        )
+        self.decoder1 = UNET._block(features * 2, features, dropout_prob)
 
-        x5 = self.middle_conv(x4)
+        self.conv = nn.Conv2d(
+            in_channels=features, out_channels=out_channels, kernel_size=1, padding=(0,2)
+        )
 
-        u1 = self.up_conv1(x5,x4)
-        u2 = self.up_conv2(u1,x3)
-        u3 = self.up_conv3(u2,x2)
-        u4 = self.up_conv4(u3,x1)
+    def forward(self, x):
+        enc1 = self.encoder1(x)
+        enc2 = self.encoder2(self.pool1(enc1))
+        enc3 = self.encoder3(self.pool2(enc2))
+        enc4 = self.encoder4(self.pool3(enc3))
 
-        return self.last_conv(u4)
+        bottleneck = self.bottleneck(self.pool4(enc4))
+
+        dec4 = self.upconv4(bottleneck)
+        enc4 = self.crop(enc4, dec4)  # Crop encoder feature map to match decoder
+        dec4 = torch.cat((dec4, enc4), dim=1)
+        dec4 = self.decoder4(dec4)
+
+        dec3 = self.upconv3(dec4)
+        enc3 = self.crop(enc3, dec3)  # Crop encoder feature map to match decoder
+        dec3 = torch.cat((dec3, enc3), dim=1)
+        dec3 = self.decoder3(dec3)
+
+        dec2 = self.upconv2(dec3)
+        enc2 = self.crop(enc2, dec2)  # Crop encoder feature map to match decoder
+        dec2 = torch.cat((dec2, enc2), dim=1)
+        dec2 = self.decoder2(dec2)
+
+        dec1 = self.upconv1(dec2)
+        enc1 = self.crop(enc1, dec1)  # Crop encoder feature map to match decoder
+        dec1 = torch.cat((dec1, enc1), dim=1)
+        dec1 = self.decoder1(dec1)
+
+        return torch.sigmoid(self.conv(dec1))
+
+    @staticmethod
+    def crop(enc, dec):
+        """Crop the encoder feature map to match the size of the decoder feature map."""
+        _, _, h, w = dec.size()
+        enc = TF.center_crop(enc, [h, w])
+        return enc
+
+    @staticmethod
+    def _block(in_channels, features, dropout_prob):
+        return nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=features, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(features),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_prob),
+            nn.Conv2d(in_channels=features, out_channels=features, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(features),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_prob),
+        )

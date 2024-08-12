@@ -23,8 +23,7 @@ def main():
     #
     BATCH_SIZE = 32
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = UNET(3,4,2)
-    model = torch.load("entire_model_.pth")
+    model = torch.load("entire_model_v1.pth")
     model = model.eval()
     transform_data = T.Compose([
     T.Resize([224,244]),

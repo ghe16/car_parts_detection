@@ -51,7 +51,7 @@ val_loader   = DataLoader(val_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
 #training
 
-def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
+def train(model, optimiser, criterion, scheduler = None, epochs = 100, store_every = 10):
     model = model.to(device= device)
     for epoch in range(epochs):
         train_correct_num = 0   # se resetea cada epoch
@@ -60,11 +60,10 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
         for mb , (x, y) in enumerate(train_loader, start=1):
             model.train()
             x= x.to(device=device, dtype = torch.float32)
-            y = y.to(device=device, dtype= torch.long).squeeze(1)  # eliminamos el canal 1 (blanco y negro)
-            _, targety, targetx = y.shape
-            scores  = model(x)
-            cost = F.cross_entropy(input=scores, target=y)
+            y = y.to(device=device)  # eliminamos el canal 1 (blanco y negro)
             optimiser.zero_grad()
+            scores  = model(x)
+            cost = criterion(input=scores, target=y)
             cost.backward()
             optimiser.step()
             if scheduler: 
@@ -74,7 +73,7 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
             train_total += torch.numel(train_predictions)
             train_cost_acum += cost.item()
             if mb%store_every == 0:
-                val_cost, val_acc, dice, iou = accuracy(model, val_loader)
+                val_cost, val_acc, dice, iou = accuracy(model, val_loader,criterion)
                 train_acc = float(train_correct_num)/train_total
                 train_cost_every = float(train_cost_acum)/mb
                 print(f'mb: {mb}, train_cost: {train_cost_every:.3f}, val cost {val_cost:.3f},'
@@ -85,21 +84,27 @@ def train(model, optimiser, scheduler = None, epochs = 100, store_every = 25):
 def main():
     
     epochs = 50
-    model = UNET(3,4,2)
-    try:
-        loaded_model = torch.load("entire_model_.pth")
-        model = loaded_model.eval()
+    
+    if os.path.isfile("entire_model_v1.pth"):
+        model = torch.load("entire_model_v1.pth")
+        #model = loaded_model.eval()
         print("existing model loaded")
-    except:
+    else:
         print("No se encontro el modelo")
+        model = UNET(in_channels=3, out_channels=1, init_features=32, dropout_prob=0.5)
+    
+    optimiser_unet = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser_unet, mode='min', factor=0.1, patience=10)
+    criterion = torch.nn.BCEWithLogitsLoss()
 
-    optimiser_unet = torch.optim.SGD(model.parameters(),
-                                    lr = 0.01, momentum=0.95,
-                                    weight_decay=1e-4
-                                    )
+    #optimiser_unet = torch.optim.SGD(model.parameters(),
+    #                                lr = 0.01, momentum=0.95,
+    #                                weight_decay=1e-4
+    #                                )
     #esta funcion se usa para encontrar el lr ideal. pero no se usa mas.
     #la simulacion mostro que el valor optimo es 0.1
     #lg_lr, losses, accuracies  = finding_lr(model, optimiser_unet, train_loader, start_val=1e-6, end_val=10)
+    
 
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser_unet,
                                                     max_lr=0.1,
@@ -113,7 +118,7 @@ def main():
     # 2 clases para segmentacion
 
 
-    train(model, optimiser_unet, scheduler, epochs)
+    train(model, optimiser_unet, criterion, scheduler, epochs)
 
 #Train model 
 if __name__ == '__main__':

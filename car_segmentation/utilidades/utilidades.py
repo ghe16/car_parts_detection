@@ -84,7 +84,7 @@ def finding_lr(model, optimiser, loader, start_val = 1e-6, end_val = 1, beta = 0
     return log_lrs, losses, accuracies
 
 
-def accuracy(model, loader):
+def accuracy(model, loader, criterion ):
     correct = 0 
     intersection = 0
     denom = 0 
@@ -95,7 +95,7 @@ def accuracy(model, loader):
     with torch.no_grad():
         for x, y in loader:
             x = x.to(device=device, dtype = torch.float32)            
-            y = y.to(device = device, dtype = torch.long).squeeze(1)            
+            y = y.to(device = device)           
             #_, targety, targetx = y.shape
             scores  = model(x)
             #scores = torch.argmax(scores,dim=1).float()
@@ -103,7 +103,7 @@ def accuracy(model, loader):
             #start_Y = (height - targety) // 2
             #start_X = (width - targetx) // 2
             #scores =  scores[:,start_Y:start_Y + targety, start_X:start_X + targetx]
-            cost += (F.cross_entropy(scores, y)).item()
+            cost += (criterion(scores, y)).item()
             #standard accuracy
             preds = torch.argmax(scores, dim=1)
             correct += (preds == y).sum()

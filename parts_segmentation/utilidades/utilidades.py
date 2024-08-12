@@ -30,8 +30,49 @@ def plot_mini_batch(train_loader, BATCH_SIZE: int, imgs, masks):
     plt.show()
 
 
+def compute_dice(preds, labels, num_classes):
+    dice_per_class = []
+    
+    for cls in range(num_classes):
+        pred_class = (preds == cls).float()
+        label_class = (labels == cls).float()
+        
+        intersection = torch.sum(pred_class * label_class)
+        union = torch.sum(pred_class) + torch.sum(label_class)
+        
+        if union == 0:
+            dice = float('nan')  # Handle case where both predictions and labels are empty
+        else:
+            dice = (2. * intersection) / union
+            
+        dice_per_class.append(dice.item())
+    
+    return torch.tensor(dice_per_class).mean().item()
 
-def accuracy(model, loader, criterion):
+
+def compute_iou(preds, labels, num_classes):
+    iou_per_class = []
+    
+    for cls in range(num_classes):
+        pred_class = (preds == cls).float()
+        label_class = (labels == cls).float()
+        
+        intersection = torch.sum(pred_class * label_class)
+        union = torch.sum(pred_class + label_class) - intersection
+        
+        if union == 0:
+            iou = float('nan')  # Handle case where both predictions and labels are empty
+        else:
+            iou = intersection / union
+            
+        iou_per_class.append(iou.item())
+    
+    return torch.tensor(iou_per_class).mean().item() 
+
+
+
+
+def accuracy(model, loader, criterion, num_classes):
     correct = 0 
     intersection = 0
     denom = 0 
@@ -61,6 +102,8 @@ def accuracy(model, loader, criterion):
             denom +=  (preds + y).sum()
             dice = 2*intersection/(denom + 1e-8)
             #intersection over union
-            union += (preds + y - preds*y).sum()
-            iou  = (intersection)/(union + 1e-8)
+            #union += (preds + y - preds*y).sum()
+            #iou  = (intersection)/(union + 1e-8)
+            dice = compute_dice(scores, y, num_classes)
+            iou = compute_iou(scores, y, num_classes)
         return cost/len(loader), float(correct/total), dice, iou

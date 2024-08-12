@@ -15,7 +15,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def load_model(model_path):
     # Instantiate the model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = UNET(3,4,2)
+    #model = UNET(3,4,2)
     model = torch.load(model_path)
     model = model.eval()
     
@@ -69,7 +69,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser( description="Programa para poner parametros de entrada")
     parser.add_argument('--image_path',type=str,required=True,help= "Path a la imagen que se quiere evaluar")
-    parser.add_argument('--model_path',type=str,default='entire_model_.pth',help="path al modelo,(opcional)")
+    parser.add_argument('--model_path',type=str,default='entire_model_v1.pth',help="path al modelo,(opcional)")
     parser.add_argument('--output_path',type=str,default='imgs_prueba/predicted_mask.jpg',help="nombre del archivo de salida (opcional)")
     args = parser.parse_args()
     main(args)

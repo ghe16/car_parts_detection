@@ -1,14 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import random
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms as T
-
-from utilidades.utilidades import accuracy
+from torch.utils.data import DataLoader, random_split
+#
+import PIL
+from PIL import Image
+#
 from cargar_dataset import carga_carDataset
 from models.UnetModelMultiClass import *
-from torch.utils.data import DataLoader, random_split
+from utilidades.utilidades import accuracy
+from utilidades.classweights import calculate_class_weights
 
 import PIL
 from PIL import Image
@@ -22,22 +28,16 @@ def main():
     TEST_PATH = "data/test/"
     #
     BATCH_SIZE = 32
+    n_classes = 22
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = UNET(3,4,21)
+    model = UNET(3,4,n_classes)
     model = torch.load("entire_model_multi.pth")
     model = model.eval()
-    transform_data = T.Compose([
-    T.Resize([224,244]),
-    T.ToTensor()
-    ])
-
-
     full_dataset = carga_carDataset.Car_Dataset(
-        TRAIN_PATH,
-        TRAIN_MASKS_PATH,
-        img_transforms=transform_data,
-        mask_transforms=transform_data
-    )
+    TRAIN_PATH,
+    TRAIN_MASKS_PATH,
+    data_augmented=False)
+
 
     TRAIN_SIZE = int(len(full_dataset)*0.8)
 
@@ -50,28 +50,38 @@ def main():
     model = model.to(device)
     with torch.no_grad():
         scores = model(imgs_val)
-        preds = torch.argmax(scores, dim = 1).float()
+        preds = torch.argmax(scores, dim = 1)
 
     imgs_val = imgs_val.cpu().float()
     preds = preds.cpu()
-    plt.figure(figsize=(20,10))
+    plt.figure(figsize=(1,n_classes))
     print(scores.shape)
     print(imgs_val.shape) 
     print(preds.shape)
+
+    cont = 1
+
     for i in range(BATCH_SIZE):
-        plt.subplot(4,8, i+1)
+        plt.subplot(1,n_classes, i+1)
         img = imgs_val[i,...].permute(1,2,0).numpy()
         plt.imshow(img)
+        plt.set_title("img_original")
         plt.axis('Off')
-        for j in scores[i,...]:
-            mask_ = scores[i,j,...].permute(1,2,0).numpy()
+
+        mask = preds[i,...].numpy()
+        plt.imshow(mask,cmap='tab10',vmin=0, vmax=n_classes-1)
+        plt.axis('Off')
+        #for j in scores[i,...]:
+            #mask_ = scores[i,j,...].permute(1,2,0).numpy()
             #img2 = img2
             #img2 = T.ToPILImage()(img2)
-            plt.imshow(mask_)
+            #plt.imshow(mask_)
         #plt.imshow(pred,cmap=plt.cm.gray)
         plt.axis('Off')
         plt.tight_layout()
-        break
+        cont += 1
+        if cont == 1:
+            break
     plt.show()
     plt.savefig("validation.png")   
 
